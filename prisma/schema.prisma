@@ -1,0 +1,124 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  agents    Agent[]
+  teams     TeamMember[]
+}
+
+model Team {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  members   TeamMember[]
+  agents    Agent[]
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  userId    String
+  teamId    String
+  role      String   @default("member") // owner, admin, member
+  createdAt DateTime @default(now())
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, teamId])
+}
+
+model Agent {
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  model        String
+  systemPrompt String   @db.Text
+  tools        String[] // Array of tool IDs
+  capabilities String[]
+  config       Json?    // Additional configuration
+  status       String   @default("draft") // draft, active, archived
+  userId       String
+  teamId       String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team         Team?    @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  
+  knowledgeSources KnowledgeSource[]
+  executions       AgentExecution[]
+  
+  @@index([userId])
+  @@index([teamId])
+  @@index([status])
+}
+
+model Tool {
+  id            String   @id @default(cuid())
+  name          String   @unique
+  displayName   String
+  description   String?
+  category      String
+  parameters    Json     // Zod schema as JSON
+  isBuiltin     Boolean  @default(false)
+  implementation Json?   // Implementation details (endpoint, etc.)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@index([category])
+  @@index([isBuiltin])
+}
+
+model KnowledgeSource {
+  id        String   @id @default(cuid())
+  agentId   String
+  type      String   // document, url, api
+  name      String
+  source    String   @db.Text // file path, URL, or API endpoint
+  settings  Json?    // Additional settings
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  
+  @@index([agentId])
+  @@index([type])
+}
+
+model AgentExecution {
+  id         String   @id @default(cuid())
+  agentId    String
+  input      String   @db.Text
+  output     String?  @db.Text
+  traceId    String?
+  runId      String?
+  durationMs Int?
+  status     String   // pending, running, completed, failed
+  error      String?  @db.Text
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  completedAt DateTime?
+  
+  agent      Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  
+  @@index([agentId])
+  @@index([status])
+  @@index([createdAt])
+}
