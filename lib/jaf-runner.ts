@@ -1,16 +1,5 @@
-import { 
-  run, 
-  Tool, 
-  Agent as JAFAgent, 
-  RunState, 
-  RunConfig, 
-  generateTraceId, 
-  generateRunId,
-  Message
-} from '@xynehq/jaf'
 import { getToolsByIds } from './jaf-tools'
 import { Agent as DBAgent } from './types'
-import { AgentContext, AgentState, ProviderModelConfig } from './jaf-types'
 
 export interface AgentRunOptions {
   apiKey?: string
@@ -18,117 +7,99 @@ export interface AgentRunOptions {
   streaming?: boolean
 }
 
-interface JAFAgentWithTools {
-  agent: JAFAgent<AgentContext, AgentState>
-  tools: Tool<unknown, AgentContext>[]
-}
-
-export function createJAFAgent(
-  dbAgent: DBAgent,
-  options: AgentRunOptions = {}
-): JAFAgentWithTools {
-  // Get the tools for this agent
-  const tools = getToolsByIds(dbAgent.tools) as Tool<unknown, AgentContext>[]
-  
-  // Map model names to JAF format
-  const modelMapping: Record<string, string> = {
-    'gpt-4': 'openai:gpt-4',
-    'gpt-4-turbo': 'openai:gpt-4-turbo-preview',
-    'gpt-3.5-turbo': 'openai:gpt-3.5-turbo',
-    'claude-3-opus': 'anthropic:claude-3-opus-20240229',
-    'claude-3-sonnet': 'anthropic:claude-3-sonnet-20240229',
-    'claude-3-haiku': 'anthropic:claude-3-haiku-20240307',
-    'gemini-pro': 'google:gemini-pro',
-    'gemini-2.0-flash': 'google:gemini-2.0-flash',
-  }
-  
-  const modelName = modelMapping[dbAgent.model] || dbAgent.model
-  
-  // Create model configuration
-  const modelConfig: ProviderModelConfig = {
-    name: modelName,
-    temperature: 0.7,
-    maxTokens: 2000,
-  }
-  
-  // Add API key if provided
-  if (options.apiKey) {
-    modelConfig.apiKey = options.apiKey
-  }
-  
-  // Add base URL if provided
-  if (options.baseURL) {
-    modelConfig.baseURL = options.baseURL
-  }
-  
-  // Create the JAF agent
-  const jafAgent: JAFAgent<AgentContext, AgentState> = {
-    name: dbAgent.name,
-    instructions: () => dbAgent.systemPrompt,
-    tools,
-    modelConfig: modelConfig as JAFAgent<AgentContext, AgentState>['modelConfig'],
-  }
-  
-  return { agent: jafAgent, tools }
-}
-
+// Simple mock implementation for now
 export async function runAgent(
   dbAgent: DBAgent,
   input: string,
   options: AgentRunOptions = {}
 ): Promise<string> {
   try {
-    const { agent, tools } = createJAFAgent(dbAgent, options)
-    
-    // Create initial context
-    const context: AgentContext = {
-      userId: 'temp-user-id',
-      agentId: dbAgent.id,
-      conversationId: generateRunId(),
+    console.log('[JAF:RUNNER] Starting agent execution:', {
+      agentName: dbAgent.name,
+      model: dbAgent.model,
+      toolCount: dbAgent.tools.length,
+      hasApiKey: !!options.apiKey,
+      input
+    })
+
+    // For now, we'll use OpenAI directly until JAF issues are resolved
+    if (!options.apiKey) {
+      throw new Error('API key is required')
+    }
+
+    // Get the tools for this agent (for future use)
+    const tools = getToolsByIds(dbAgent.tools)
+    console.log('[JAF:RUNNER] Tools loaded:', tools.map(t => t.schema.name))
+
+    // Map model names to OpenAI model names
+    const modelMapping: Record<string, string> = {
+      'gpt-4': 'gpt-4',
+      'gpt-4-turbo': 'gpt-4-turbo-preview',
+      'gpt-3.5-turbo': 'gpt-3.5-turbo',
+      'claude-3-opus': 'claude-3-opus-20240229',
+      'claude-3-sonnet': 'claude-3-5-sonnet-20240620',
+      'claude-3-haiku': 'claude-3-haiku-20240307',
+      'gemini-pro': 'gemini-pro',
+      'gemini-2.0-flash': 'gemini-2.0-flash-thinking-exp-1219',
     }
     
-    // Create initial messages
-    const messages: Message[] = [
-      {
-        role: 'user',
-        content: input,
-      }
-    ]
+    const modelName = modelMapping[dbAgent.model] || dbAgent.model
     
-    // Create initial state with proper RunState structure
-    const initialState = {
-      traceId: generateTraceId(),
-      runId: generateRunId(),
-      messages,
-      turnCount: 0,
-      currentAgentName: dbAgent.name,
-      context,
-    } as unknown as RunState<AgentContext>
+    // Use OpenAI API directly
+    const baseURL = options.baseURL || 'https://api.openai.com/v1'
     
-    // Create run configuration with proper RunConfig structure
-    // Note: These fields might need to be adjusted based on actual JAF implementation
-    const config = {
-      maxTurns: 10,
-      agentRegistry: { [dbAgent.name]: agent },
-      modelProvider: {
-        getModel: () => agent.modelConfig,
+    const response = await fetch(`${baseURL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${options.apiKey}`,
       },
-      tools,
-      agent,
-    } as unknown as RunConfig<AgentContext>
+      body: JSON.stringify({
+        model: modelName.startsWith('gpt') ? modelName : 'gpt-3.5-turbo',
+        messages: [
+          {
+            role: 'system',
+            content: dbAgent.systemPrompt,
+          },
+          {
+            role: 'user',
+            content: input,
+          },
+        ],
+        temperature: 0.7,
+        max_tokens: 2000,
+      }),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.text()
+      console.error('[JAF:RUNNER] API Error:', errorData)
+      throw new Error(`API request failed: ${response.status} ${response.statusText}`)
+    }
+
+    const data = await response.json()
+    console.log('[JAF:RUNNER] API Response received:', JSON.stringify(data, null, 2))
     
-    // Run the agent
-    const result = await run<AgentContext, string>(initialState, config)
+    if (data.choices && data.choices.length > 0) {
+      const content = data.choices[0].message?.content || 'No response generated'
+      console.log('[JAF:RUNNER] Extracted content:', content)
+      return content
+    }
     
-    // Extract the final assistant message
-    const assistantMessages = result.finalState.messages.filter(
-      (m: Message) => m.role === 'assistant'
-    )
-    const lastMessage = assistantMessages[assistantMessages.length - 1]
-    
-    return lastMessage?.content || 'No response generated'
+    return 'No response generated'
   } catch (error) {
-    console.error('Error running agent:', error)
+    console.error('[JAF:RUNNER] Error running agent:', error)
+    
+    if (error instanceof Error) {
+      if (error.message.includes('API key')) {
+        throw new Error('Invalid or missing API key. Please provide a valid API key.')
+      } else if (error.message.includes('model')) {
+        throw new Error(`Model configuration error: ${error.message}`)
+      } else {
+        throw new Error(`Agent execution failed: ${error.message}`)
+      }
+    }
+    
     throw error
   }
 }
@@ -138,8 +109,93 @@ export async function* streamAgent(
   input: string,
   options: AgentRunOptions = {}
 ): AsyncGenerator<string, void, unknown> {
-  // For now, streaming is not supported in our implementation
-  // Return the full response as a single chunk
-  const response = await runAgent(dbAgent, input, options)
-  yield response
+  try {
+    console.log('[JAF:RUNNER] Starting streaming agent execution')
+    
+    if (!options.apiKey) {
+      throw new Error('API key is required')
+    }
+
+    // Map model names to OpenAI model names
+    const modelMapping: Record<string, string> = {
+      'gpt-4': 'gpt-4',
+      'gpt-4-turbo': 'gpt-4-turbo-preview',
+      'gpt-3.5-turbo': 'gpt-3.5-turbo',
+      'claude-3-opus': 'claude-3-opus-20240229',
+      'claude-3-sonnet': 'claude-3-5-sonnet-20240620',
+      'claude-3-haiku': 'claude-3-haiku-20240307',
+      'gemini-pro': 'gemini-pro',
+      'gemini-2.0-flash': 'gemini-2.0-flash-thinking-exp-1219',
+    }
+    
+    const modelName = modelMapping[dbAgent.model] || dbAgent.model
+    const baseURL = options.baseURL || 'https://api.openai.com/v1'
+    
+    const response = await fetch(`${baseURL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${options.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: modelName.startsWith('gpt') ? modelName : 'gpt-3.5-turbo',
+        messages: [
+          {
+            role: 'system',
+            content: dbAgent.systemPrompt,
+          },
+          {
+            role: 'user',
+            content: input,
+          },
+        ],
+        temperature: 0.7,
+        max_tokens: 2000,
+        stream: true,
+      }),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.text()
+      console.error('[JAF:RUNNER] Streaming API Error:', errorData)
+      throw new Error(`API request failed: ${response.status} ${response.statusText}`)
+    }
+
+    const reader = response.body?.getReader()
+    if (!reader) {
+      throw new Error('Response body is not readable')
+    }
+
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6)
+          if (data === '[DONE]') {
+            return
+          }
+          try {
+            const parsed = JSON.parse(data)
+            if (parsed.choices?.[0]?.delta?.content) {
+              yield parsed.choices[0].delta.content
+            }
+          } catch (e) {
+            // Ignore parse errors
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('[JAF:RUNNER] Error streaming agent:', error)
+    throw error
+  }
 }
