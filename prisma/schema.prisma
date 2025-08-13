@@ -50,10 +50,30 @@ model Agent {
   name         String
   description  String?
   model        String
-  systemPrompt String   @db.Text
+  
+  // JAF Core fields
+  instructions String   @default("") @db.Text // JAF instructions (can be template)
+  modelConfig  Json?    // temperature, maxTokens, etc.
+  handoffs     String[] // Other agent names for handoffs
+  outputSchema Json?    // Zod schema for structured output
+  
+  // Memory configuration
+  memoryType   String?  @default("in-memory") // 'in-memory', 'redis', 'postgres'
+  memoryConfig Json?    // Memory-specific settings
+  
+  // Guardrails
+  inputGuardrails  Json? // Input validation rules
+  outputGuardrails Json? // Output validation rules
+  
+  // Tools and capabilities
   tools        String[] // Array of tool IDs
   capabilities String[]
+  
+  // Legacy/compatibility fields (will migrate data)
+  systemPrompt String   @db.Text
   config       Json?    // Additional configuration
+  
+  // Metadata
   status       String   @default("draft") // draft, active, archived
   userId       String
   teamId       String?
@@ -77,9 +97,14 @@ model Tool {
   displayName   String
   description   String?
   category      String
-  parameters    Json     // Zod schema as JSON
+  
+  // JAF Tool Schema
+  schema        Json?    // Full JAF tool schema
+  parameters    Json     // Zod schema as JSON (for compatibility)
+  implementation String?  @db.Text // Custom implementation code
   isBuiltin     Boolean  @default(false)
-  implementation Json?   // Implementation details (endpoint, etc.)
+  
+  // Metadata
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   

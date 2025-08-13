@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/db'
-import { runAgent, streamAgent } from '@/lib/jaf-runner'
+import { runAgent, streamAgent } from '@/lib/jaf/runner'
 
 export async function POST(
   request: NextRequest,
@@ -18,139 +17,74 @@ export async function POST(
       )
     }
     
-    // Fetch the agent
-    const agent = await prisma.agent.findUnique({
-      where: { id },
-    })
-    
-    if (!agent) {
-      return NextResponse.json(
-        { error: 'Agent not found' },
-        { status: 404 }
-      )
-    }
-    
-    // Create execution record
-    const execution = await prisma.agentExecution.create({
-      data: {
-        agentId: id,
-        input,
-        status: 'running',
-      },
-    })
-    
-    try {
-      // Convert Prisma agent to the format expected by streamAgent
-      const agentForRunner = {
-        ...agent,
-        config: agent.config as Record<string, unknown> | undefined
-      }
-      
-      if (streaming) {
-        // Return a streaming response
-        const encoder = new TextEncoder()
-        const stream = new ReadableStream({
-          async start(controller) {
-            try {
-              for await (const chunk of streamAgent(agentForRunner, input, { apiKey, baseURL })) {
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content: chunk })}\n\n`))
-              }
-              
-              // Update execution record
-              await prisma.agentExecution.update({
-                where: { id: execution.id },
-                data: {
-                  status: 'completed',
-                  completedAt: new Date(),
-                },
-              })
-              
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true })}\n\n`))
-              controller.close()
-            } catch (error) {
-              const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-              
-              await prisma.agentExecution.update({
-                where: { id: execution.id },
-                data: {
-                  status: 'failed',
-                  error: errorMessage,
-                  completedAt: new Date(),
-                },
-              })
-              
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: errorMessage })}\n\n`))
-              controller.close()
+    if (streaming) {
+      // Return a streaming response
+      const encoder = new TextEncoder()
+      const stream = new ReadableStream({
+        async start(controller) {
+          try {
+            for await (const chunk of streamAgent(id, input, { apiKey, baseURL })) {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content: chunk })}\n\n`))
             }
-          },
-        })
-        
-        return new Response(stream, {
-          headers: {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
-          },
-        })
-      } else {
-        // Non-streaming response
-        const startTime = Date.now()
-        const output = await runAgent(agentForRunner, input, { apiKey, baseURL })
-        const durationMs = Date.now() - startTime
-        
-        // Update execution record
-        await prisma.agentExecution.update({
-          where: { id: execution.id },
-          data: {
-            output,
-            status: 'completed',
-            durationMs,
-            completedAt: new Date(),
-          },
-        })
-        
-        return NextResponse.json({
-          executionId: execution.id,
-          output,
-          durationMs,
-        })
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      
-      // Update execution record with error
-      await prisma.agentExecution.update({
-        where: { id: execution.id },
-        data: {
-          status: 'failed',
-          error: errorMessage,
-          completedAt: new Date(),
+            
+            controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+            controller.close()
+          } catch (error) {
+            console.error('[API:EXECUTE] Streaming error:', error)
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ error: errorMessage })}\n\n`)
+            )
+            controller.close()
+          }
         },
       })
       
-      throw error
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+        },
+      })
+    } else {
+      // Non-streaming response
+      const result = await runAgent(id, input, { apiKey, baseURL })
+      
+      return NextResponse.json(result)
     }
   } catch (error) {
-    console.error('Failed to execute agent:', error)
+    console.error('[API:EXECUTE] Error:', error)
     
-    const errorMessage = error instanceof Error ? error.message : 'Failed to execute agent'
-    
-    // Check if it's an API key error
-    if (errorMessage.includes('API key') || errorMessage.includes('authentication')) {
+    if (error instanceof Error) {
+      // Check for specific error types
+      if (error.message.includes('not found')) {
+        return NextResponse.json(
+          { error: error.message },
+          { status: 404 }
+        )
+      }
+      
+      if (error.message.includes('API key')) {
+        return NextResponse.json(
+          { error: error.message },
+          { status: 401 }
+        )
+      }
+      
       return NextResponse.json(
-        { error: 'Invalid or missing API key. Please provide a valid API key for the selected model.' },
-        { status: 401 }
+        { error: error.message },
+        { status: 500 }
       )
     }
     
     return NextResponse.json(
-      { error: errorMessage },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }
 }
 
-// Get execution history for an agent
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -158,17 +92,17 @@ export async function GET(
   try {
     const { id } = await params
     
-    const executions = await prisma.agentExecution.findMany({
-      where: { agentId: id },
-      orderBy: { createdAt: 'desc' },
-      take: 50, // Limit to last 50 executions
+    // Return last execution or agent info
+    // This is a placeholder - implement based on your needs
+    return NextResponse.json({
+      agentId: id,
+      status: 'ready',
+      message: 'Use POST to execute the agent'
     })
-    
-    return NextResponse.json(executions)
   } catch (error) {
-    console.error('Failed to fetch execution history:', error)
+    console.error('[API:EXECUTE] GET error:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch execution history' },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }
