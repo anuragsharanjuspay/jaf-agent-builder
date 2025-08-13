@@ -1,7 +1,7 @@
 'use client'
 
 import { AgentForm } from '@/components/agents/agent-form'
-import { Tool } from '@/lib/types'
+import { Tool, AgentConfig } from '@/lib/types'
 import { useRouter } from 'next/navigation'
 
 // Mock tools data - will be replaced with API call
@@ -47,7 +47,7 @@ const mockTools: Tool[] = [
 export default function NewAgentPage() {
   const router = useRouter()
 
-  const handleSubmit = async (data: any) => {
+  const handleSubmit = async (data: AgentConfig) => {
     // TODO: Submit to API
     console.log('Creating agent:', data)
     
@@ -63,7 +63,7 @@ export default function NewAgentPage() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight">Create New Agent</h1>
         <p className="text-muted-foreground">
-          Configure your agent's behavior and capabilities
+          Configure your agent&apos;s behavior and capabilities
         </p>
       </div>
       <AgentForm tools={mockTools} onSubmit={handleSubmit} />

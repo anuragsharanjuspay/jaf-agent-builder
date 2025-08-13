@@ -11,14 +11,22 @@ export const agentSchema = z.object({
   status: z.enum(['draft', 'active', 'archived']).default('draft'),
 })
 
-export type AgentConfig = z.infer<typeof agentSchema>
+export type AgentConfig = {
+  name: string
+  description?: string
+  model: string
+  systemPrompt: string
+  tools: string[]
+  capabilities: string[]
+  status: 'draft' | 'active' | 'archived'
+}
 
 // Knowledge source schema
 export const knowledgeSourceSchema = z.object({
   type: z.enum(['document', 'url', 'api']),
   name: z.string().min(1),
   source: z.string().min(1),
-  settings: z.record(z.any()).optional(),
+  settings: z.record(z.string(), z.unknown()).optional(),
 })
 
 export type KnowledgeSource = z.infer<typeof knowledgeSourceSchema>
@@ -49,7 +57,7 @@ export interface Agent {
   systemPrompt: string
   tools: string[]
   capabilities: string[]
-  config?: any
+  config?: Record<string, unknown>
   status: string
   userId: string
   teamId?: string | null
@@ -58,15 +66,22 @@ export interface Agent {
   knowledgeSources?: KnowledgeSource[]
 }
 
+export interface ToolParameter {
+  name: string
+  type: string
+  description: string
+  required: boolean
+}
+
 export interface Tool {
   id: string
   name: string
   displayName: string
   description?: string | null
   category: string
-  parameters: any
+  parameters: ToolParameter[] | Record<string, unknown>
   isBuiltin: boolean
-  implementation?: any
+  implementation?: Record<string, unknown>
   createdAt: Date
   updatedAt: Date
 }

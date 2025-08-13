@@ -1,4 +1,4 @@
-import { Agent, Tool } from './types'
+import { Agent, Tool, ToolParameter } from './types'
 
 /**
  * Transform UI agent configuration to JAF-compatible TypeScript code
@@ -40,13 +40,15 @@ export default ${agentVarName}Agent;
  * Generate JAF tool code from tool definition
  */
 function generateToolCode(tool: Tool): string {
-  const params = tool.parameters as any[]
+  const params = Array.isArray(tool.parameters) 
+    ? tool.parameters as ToolParameter[]
+    : []
   
   // Generate Zod schema for parameters
   const zodSchema = generateZodSchema(params)
   
   return `// ${tool.displayName} Tool
-const ${tool.name}: Tool<any, AppContext> = {
+const ${tool.name}: Tool<unknown, AppContext> = {
   schema: {
     name: "${tool.name}",
     description: "${tool.description || ''}",
@@ -62,7 +64,7 @@ const ${tool.name}: Tool<any, AppContext> = {
 /**
  * Generate Zod schema from parameter definitions
  */
-function generateZodSchema(params: any[]): string {
+function generateZodSchema(params: ToolParameter[]): string {
   if (!params || params.length === 0) {
     return 'z.object({})'
   }

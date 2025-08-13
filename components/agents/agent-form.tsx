@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { AgentConfig, agentSchema, AVAILABLE_MODELS, Tool } from '@/lib/types'
+import { z } from 'zod'
+import { AgentConfig, AVAILABLE_MODELS, Tool } from '@/lib/types'
 import {
   Form,
   FormControl,
@@ -27,6 +28,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ToolSelector } from './tool-selector'
 import { KnowledgeManager } from './knowledge-manager'
 
+// Form-specific schema
+const agentFormSchema = z.object({
+  name: z.string().min(1, "Agent name is required"),
+  description: z.string().optional(),
+  model: z.string().min(1, "Model selection is required"),
+  systemPrompt: z.string().min(1, "System prompt is required"),
+  tools: z.array(z.string()),
+  capabilities: z.array(z.string()),
+  status: z.enum(['draft', 'active', 'archived']),
+})
+
+type AgentFormData = z.infer<typeof agentFormSchema>
+
 interface AgentFormProps {
   agent?: AgentConfig
   tools?: Tool[]
@@ -36,8 +50,8 @@ interface AgentFormProps {
 export function AgentForm({ agent, tools = [], onSubmit }: AgentFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const form = useForm<AgentConfig>({
-    resolver: zodResolver(agentSchema),
+  const form = useForm<AgentFormData>({
+    resolver: zodResolver(agentFormSchema),
     defaultValues: agent || {
       name: '',
       description: '',
@@ -49,10 +63,11 @@ export function AgentForm({ agent, tools = [], onSubmit }: AgentFormProps) {
     },
   })
 
-  const handleSubmit = async (data: AgentConfig) => {
+  const handleSubmit = async (data: AgentFormData) => {
+    const agentData: AgentConfig = data as AgentConfig
     setIsSubmitting(true)
     try {
-      await onSubmit(data)
+      await onSubmit(agentData)
     } finally {
       setIsSubmitting(false)
     }
@@ -141,7 +156,7 @@ export function AgentForm({ agent, tools = [], onSubmit }: AgentFormProps) {
           <CardHeader>
             <CardTitle>System Prompt</CardTitle>
             <CardDescription>
-              Define the agent's behavior and personality
+              Define the agent&apos;s behavior and personality
             </CardDescription>
           </CardHeader>
           <CardContent>

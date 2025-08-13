@@ -4,7 +4,7 @@ import { agentSchema } from '@/lib/types'
 
 const prisma = new PrismaClient()
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // TODO: Get user from session
     const userId = 'temp-user-id'

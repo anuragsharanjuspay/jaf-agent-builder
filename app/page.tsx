@@ -67,7 +67,7 @@ export default function HomePage() {
           </CardHeader>
           <CardContent>
             <CardDescription>
-              Built on JAF's functional, type-safe foundation
+              Built on JAF&apos;s functional, type-safe foundation
             </CardDescription>
           </CardContent>
         </Card>

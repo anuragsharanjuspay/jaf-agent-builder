@@ -93,7 +93,7 @@ export function KnowledgeManager({ sources = [], onChange }: KnowledgeManagerPro
             <Label htmlFor="source-type">Type</Label>
             <Select
               value={newSource.type}
-              onValueChange={(value) => setNewSource({ ...newSource, type: value as any })}
+              onValueChange={(value) => setNewSource({ ...newSource, type: value as 'document' | 'url' | 'api' })}
             >
               <SelectTrigger id="source-type">
                 <SelectValue />

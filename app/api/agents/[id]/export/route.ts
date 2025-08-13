@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 import { agentConfigToJAF, exportAgentAsJSON } from '@/lib/jaf-transformer'
+import { Agent, Tool } from '@/lib/types'
 
 const prisma = new PrismaClient()
 
@@ -28,15 +29,34 @@ export async function GET(
     }
     
     // Get tools for the agent
-    const tools = await prisma.tool.findMany({
+    const prismaTools = await prisma.tool.findMany({
       where: {
         id: { in: agent.tools },
       },
     })
     
+    // Convert Prisma tools to our Tool type
+    const tools: Tool[] = prismaTools.map(tool => ({
+      ...tool,
+      parameters: tool.parameters as Tool['parameters'],
+      implementation: tool.implementation as Record<string, unknown> | undefined,
+    }))
+    
+    // Convert Prisma agent to our Agent type
+    const agentData: Agent = {
+      ...agent,
+      config: agent.config as Record<string, unknown> | undefined,
+      knowledgeSources: agent.knowledgeSources.map(ks => ({
+        type: ks.type as 'document' | 'url' | 'api',
+        name: ks.name,
+        source: ks.source,
+        settings: ks.settings as Record<string, unknown> | undefined,
+      })),
+    }
+    
     if (format === 'json') {
       // Export as JSON
-      const jsonContent = exportAgentAsJSON(agent)
+      const jsonContent = exportAgentAsJSON(agentData)
       return new Response(jsonContent, {
         headers: {
           'Content-Type': 'application/json',
@@ -45,7 +65,7 @@ export async function GET(
       })
     } else {
       // Export as JAF TypeScript code
-      const jafCode = agentConfigToJAF(agent, tools)
+      const jafCode = agentConfigToJAF(agentData, tools)
       return new Response(jafCode, {
         headers: {
           'Content-Type': 'text/plain',

@@ -64,7 +64,7 @@ export default function EditAgentPage({ params }: EditAgentPageProps) {
   const router = useRouter()
   const { id } = use(params)
 
-  const handleSubmit = async (data: any) => {
+  const handleSubmit = async (data: AgentConfig) => {
     // TODO: Submit to API
     console.log('Updating agent:', id, data)
     
@@ -80,7 +80,7 @@ export default function EditAgentPage({ params }: EditAgentPageProps) {
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight">Edit Agent</h1>
         <p className="text-muted-foreground">
-          Update your agent's configuration
+          Update your agent&apos;s configuration
         </p>
       </div>
       <AgentForm agent={mockAgent} tools={mockTools} onSubmit={handleSubmit} />
