@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '@/lib/db'
 import { agentConfigToJAF, exportAgentAsJSON } from '@/lib/jaf-transformer'
 import { Agent, Tool } from '@/lib/types'
-
-const prisma = new PrismaClient()
 
 export async function GET(
   request: NextRequest,
