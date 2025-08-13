@@ -17,6 +17,9 @@ export function Header() {
               <Link href="/tools" className="text-sm font-medium hover:text-primary">
                 Tools
               </Link>
+              <Link href="/settings" className="text-sm font-medium hover:text-primary">
+                Settings
+              </Link>
             </div>
           </div>
           <div className="flex items-center gap-2">

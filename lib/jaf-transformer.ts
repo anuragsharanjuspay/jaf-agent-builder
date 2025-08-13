@@ -16,10 +16,21 @@ type AppContext = {
   permissions: string[];
 };
 
+// Define agent state type
+type AgentState = {
+  history: Array<{
+    role: 'user' | 'assistant' | 'system';
+    content: string;
+  }>;
+  context: AppContext;
+  toolCallCount: number;
+  lastToolResult?: string;
+};
+
 ${selectedTools.map(tool => generateToolCode(tool)).join('\n\n')}
 
 // Agent configuration
-const ${agentVarName}Agent: Agent<AppContext, any> = {
+const ${agentVarName}Agent: Agent<AppContext, AgentState> = {
   name: '${agent.name}',
   instructions: (state) => \`${agent.systemPrompt.replace(/`/g, '\\`')}\`,
   tools: [${selectedTools.map(t => t.name).join(', ')}],
@@ -83,10 +94,10 @@ function generateZodSchema(params: ToolParameter[]): string {
         fieldSchema = 'z.boolean()'
         break
       case 'array':
-        fieldSchema = 'z.array(z.any())'
+        fieldSchema = 'z.array(z.unknown())'
         break
       default:
-        fieldSchema = 'z.any()'
+        fieldSchema = 'z.unknown()'
     }
     
     if (param.description) {

@@ -211,7 +211,11 @@ export function AgentForm({ agent, tools = [], onSubmit }: AgentFormProps) {
         </Card>
 
         <div className="flex justify-end gap-4">
-          <Button type="button" variant="outline">
+          <Button 
+            type="button" 
+            variant="outline"
+            onClick={() => window.history.back()}
+          >
             Cancel
           </Button>
           <Button type="submit" disabled={isSubmitting}>

@@ -1,61 +1,62 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { AgentForm } from '@/components/agents/agent-form'
 import { Tool, AgentConfig } from '@/lib/types'
 import { useRouter } from 'next/navigation'
 
-// Mock tools data - will be replaced with API call
-const mockTools: Tool[] = [
-  {
-    id: 'calculator',
-    name: 'calculator',
-    displayName: 'Calculator',
-    description: 'Perform mathematical calculations',
-    category: 'Math',
-    parameters: [
-      {
-        name: 'expression',
-        type: 'string',
-        description: 'Math expression to evaluate',
-        required: true,
-      },
-    ],
-    isBuiltin: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  },
-  {
-    id: 'web-search',
-    name: 'webSearch',
-    displayName: 'Web Search',
-    description: 'Search the web for information',
-    category: 'Search',
-    parameters: [
-      {
-        name: 'query',
-        type: 'string',
-        description: 'Search query',
-        required: true,
-      },
-    ],
-    isBuiltin: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  },
-]
-
 export default function NewAgentPage() {
   const router = useRouter()
+  const [tools, setTools] = useState<Tool[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    // Fetch available tools from API
+    fetch('/api/tools')
+      .then(res => res.json())
+      .then(data => {
+        setTools(data)
+        setLoading(false)
+      })
+      .catch(error => {
+        console.error('Failed to fetch tools:', error)
+        setLoading(false)
+      })
+  }, [])
 
   const handleSubmit = async (data: AgentConfig) => {
-    // TODO: Submit to API
-    console.log('Creating agent:', data)
-    
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
-    // Redirect to agents list
-    router.push('/agents')
+    try {
+      const response = await fetch('/api/agents', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to create agent')
+      }
+
+      const agent = await response.json()
+      
+      // Redirect to agent detail page
+      router.push(`/agents/${agent.id}`)
+    } catch (error) {
+      console.error('Error creating agent:', error)
+      alert('Failed to create agent. Please try again.')
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="container mx-auto py-8 max-w-4xl">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold tracking-tight">Create New Agent</h1>
+          <p className="text-muted-foreground">Loading tools...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -66,7 +67,7 @@ export default function NewAgentPage() {
           Configure your agent&apos;s behavior and capabilities
         </p>
       </div>
-      <AgentForm tools={mockTools} onSubmit={handleSubmit} />
+      <AgentForm tools={tools} onSubmit={handleSubmit} />
     </div>
   )
 }

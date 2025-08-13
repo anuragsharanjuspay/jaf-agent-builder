@@ -55,7 +55,7 @@ export function AgentCard({ agent }: AgentCardProps) {
             Edit
           </Button>
         </Link>
-        <Link href={`/agents/${agent.id}/test`} className="flex-1">
+        <Link href={`/agents/${agent.id}/playground`} className="flex-1">
           <Button className="w-full">Test</Button>
         </Link>
       </CardFooter>
