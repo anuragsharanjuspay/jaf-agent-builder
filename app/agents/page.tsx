@@ -14,12 +14,18 @@ export default async function AgentsPage() {
     orderBy: { updatedAt: 'desc' },
   })
   
-  // Ensure arrays are properly formatted
+  // Ensure arrays are properly formatted and types are correct
   const formattedAgents = agents.map(agent => ({
     ...agent,
     tools: agent.tools || [],
     capabilities: agent.capabilities || [],
-    knowledgeSources: agent.knowledgeSources || []
+    knowledgeSources: (agent.knowledgeSources || []).map(ks => ({
+      name: ks.name,
+      type: ks.type as 'document' | 'url' | 'api',
+      source: ks.source,
+      settings: (ks.settings || undefined) as Record<string, unknown> | undefined
+    })),
+    config: (agent.config || undefined) as Record<string, unknown> | undefined
   }))
 
   return (

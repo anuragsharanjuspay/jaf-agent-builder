@@ -37,7 +37,17 @@ export async function GET(
       : []
     
     // Convert Prisma tools to our Tool type
-    const tools: Tool[] = prismaTools.map(tool => ({
+    const tools: Tool[] = prismaTools.map((tool: {
+      id: string
+      name: string
+      displayName: string
+      description: string | null
+      category: string
+      parameters: unknown
+      isBuiltin: boolean
+      createdAt: Date
+      updatedAt: Date
+    }) => ({
       ...tool,
       parameters: tool.parameters as Tool['parameters'],
       implementation: undefined, // Implementation is stored as string in DB, not compatible with Tool type
@@ -47,7 +57,12 @@ export async function GET(
     const agentData: Agent = {
       ...agent,
       config: agent.config as Record<string, unknown> | undefined,
-      knowledgeSources: agent.knowledgeSources.map(ks => ({
+      knowledgeSources: agent.knowledgeSources.map((ks: {
+        type: string
+        name: string
+        source: string
+        settings: unknown
+      }) => ({
         type: ks.type as 'document' | 'url' | 'api',
         name: ks.name,
         source: ks.source,

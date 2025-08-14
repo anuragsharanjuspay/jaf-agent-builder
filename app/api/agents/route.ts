@@ -16,7 +16,12 @@ export async function GET() {
     })
     
     // Ensure arrays are properly formatted in each agent
-    const formattedAgents = agents.map(agent => ({
+    const formattedAgents = agents.map((agent: {
+      tools: string[]
+      capabilities: string[]
+      knowledgeSources: unknown[]
+      [key: string]: unknown
+    }) => ({
       ...agent,
       tools: agent.tools || [],
       capabilities: agent.capabilities || [],
