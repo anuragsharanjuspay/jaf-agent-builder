@@ -26,12 +26,15 @@ export async function GET(
       )
     }
     
-    // Get tools for the agent
-    const prismaTools = await prisma.tool.findMany({
-      where: {
-        id: { in: agent.tools },
-      },
-    })
+    // Get tools for the agent - ensure tools is an array
+    const toolIds = agent.tools || []
+    const prismaTools = toolIds.length > 0 
+      ? await prisma.tool.findMany({
+          where: {
+            id: { in: toolIds },
+          },
+        })
+      : []
     
     // Convert Prisma tools to our Tool type
     const tools: Tool[] = prismaTools.map(tool => ({

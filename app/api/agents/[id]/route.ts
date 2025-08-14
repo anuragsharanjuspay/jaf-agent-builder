@@ -23,7 +23,15 @@ export async function GET(
       )
     }
     
-    return NextResponse.json(agent)
+    // Ensure arrays are properly formatted
+    const responseData = {
+      ...agent,
+      tools: agent.tools || [],
+      capabilities: agent.capabilities || [],
+      knowledgeSources: agent.knowledgeSources || []
+    }
+    
+    return NextResponse.json(responseData)
   } catch (error) {
     console.error('Failed to fetch agent:', error)
     return NextResponse.json(

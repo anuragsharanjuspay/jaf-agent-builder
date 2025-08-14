@@ -15,7 +15,15 @@ export async function GET() {
       orderBy: { updatedAt: 'desc' },
     })
     
-    return NextResponse.json(agents)
+    // Ensure arrays are properly formatted in each agent
+    const formattedAgents = agents.map(agent => ({
+      ...agent,
+      tools: agent.tools || [],
+      capabilities: agent.capabilities || [],
+      knowledgeSources: agent.knowledgeSources || []
+    }))
+    
+    return NextResponse.json(formattedAgents)
   } catch (error) {
     console.error('Failed to fetch agents:', error)
     return NextResponse.json(

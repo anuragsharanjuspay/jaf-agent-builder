@@ -184,7 +184,7 @@ export default function AgentDetailPage({
           </CardContent>
         </Card>
 
-        {agent.tools && agent.tools.length > 0 && (
+        {agent.tools && Array.isArray(agent.tools) && agent.tools.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle>Tools</CardTitle>
@@ -204,7 +204,7 @@ export default function AgentDetailPage({
           </Card>
         )}
 
-        {agent.knowledgeSources && agent.knowledgeSources.length > 0 && (
+        {agent.knowledgeSources && Array.isArray(agent.knowledgeSources) && agent.knowledgeSources.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle>Knowledge Sources</CardTitle>
