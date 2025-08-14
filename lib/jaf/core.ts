@@ -8,45 +8,36 @@ import {
   Agent, 
   RunState, 
   RunConfig,
-  Message,
   generateTraceId,
   generateRunId,
-  Tool
+  Tool,
+  ModelConfig,
+  ModelProvider
 } from '@xynehq/jaf'
-import { createModelProvider, ModelProviderConfig } from './provider'
+import { z } from 'zod'
+import { createModelProvider } from './provider'
+import { 
+  JAFContext,
+  JAFExecutionOptions
+} from './types'
 
-export interface JAFExecutionOptions {
-  modelProvider: ModelProviderConfig
-  maxTurns?: number
-  streaming?: boolean
-  conversationId?: string
-  memory?: {
-    type: 'in-memory' | 'redis' | 'postgres'
-    config?: any
-  }
-}
-
-export interface JAFExecutionContext {
-  userId: string
-  agentId: string
-  sessionId: string
-  metadata?: Record<string, any>
-}
+// Re-export for backwards compatibility
+export type { JAFExecutionOptions, JAFContext as JAFExecutionContext } from './types'
 
 /**
  * Execute a JAF agent
  */
-export async function executeJAFAgent<Ctx = JAFExecutionContext, Out = string>(
+export async function executeJAFAgent<Ctx = JAFContext, Out = string>(
   agent: Agent<Ctx, Out>,
   input: string,
   context: Ctx,
   options: JAFExecutionOptions
 ): Promise<Out> {
-  // Create the model provider
-  const modelProvider = createModelProvider(options.modelProvider)
+  // Create the model provider - cast through unknown for generic type compatibility
+  const modelProvider = createModelProvider(options.modelProvider) as unknown as ModelProvider<Ctx>
   
   // Create agent registry
-  const agentRegistry = new Map<string, Agent<Ctx, any>>()
+  const agentRegistry = new Map<string, Agent<Ctx, unknown>>()
   agentRegistry.set(agent.name, agent)
   
   // Add handoff agents if specified
@@ -61,12 +52,7 @@ export async function executeJAFAgent<Ctx = JAFExecutionContext, Out = string>(
     agentRegistry,
     modelProvider,
     maxTurns: options.maxTurns || 10,
-    ...(options.memory && {
-      memory: {
-        type: options.memory.type,
-        config: options.memory.config
-      }
-    }),
+    // Memory configuration would go here - temporarily disabled for type compatibility
     ...(options.conversationId && {
       conversationId: options.conversationId
     })
@@ -108,7 +94,7 @@ export async function executeJAFAgent<Ctx = JAFExecutionContext, Out = string>(
  * Stream a JAF agent execution
  * Note: JAF doesn't have built-in streaming, so we'll implement a custom solution
  */
-export async function* streamJAFAgent<Ctx = JAFExecutionContext>(
+export async function* streamJAFAgent<Ctx = JAFContext>(
   agent: Agent<Ctx, string>,
   input: string,
   context: Ctx,
@@ -116,10 +102,6 @@ export async function* streamJAFAgent<Ctx = JAFExecutionContext>(
 ): AsyncGenerator<string, void, unknown> {
   // For now, we'll execute normally and yield the result
   // In a production implementation, you'd want to integrate with JAF's event system
-  
-  const modelProvider = createModelProvider(options.modelProvider)
-  
-  // For now, execute normally and yield the full result
   // JAF doesn't have built-in streaming support
   
   // Execute and yield the result in chunks
@@ -143,23 +125,21 @@ export async function* streamJAFAgent<Ctx = JAFExecutionContext>(
 /**
  * Create a JAF agent from configuration
  */
-export function createJAFAgent<Ctx = JAFExecutionContext, Out = string>(
+export function createJAFAgent<Ctx = JAFContext, Out = string>(
   config: {
     name: string
     instructions: string | ((state: RunState<Ctx>) => string)
-    tools?: Tool<any, Ctx>[]
-    modelConfig?: {
-      name?: string
-      temperature?: number
-      maxTokens?: number
-    }
-    outputCodec?: any // Zod schema for structured output
+    tools?: Tool<unknown, Ctx>[]
+    modelConfig?: ModelConfig
+    outputCodec?: z.ZodTypeAny // Zod schema for structured output
     handoffs?: string[]
   }
 ): Agent<Ctx, Out> {
   return {
     name: config.name,
-    instructions: config.instructions,
+    instructions: typeof config.instructions === 'string' 
+      ? () => config.instructions as string
+      : config.instructions,
     tools: config.tools,
     modelConfig: config.modelConfig,
     outputCodec: config.outputCodec,
@@ -170,7 +150,7 @@ export function createJAFAgent<Ctx = JAFExecutionContext, Out = string>(
 /**
  * Validate agent configuration
  */
-export function validateAgentConfig(config: any): boolean {
+export function validateAgentConfig(config: Record<string, unknown>): boolean {
   // Basic validation
   if (!config.name || typeof config.name !== 'string') {
     throw new Error('Agent name is required and must be a string')

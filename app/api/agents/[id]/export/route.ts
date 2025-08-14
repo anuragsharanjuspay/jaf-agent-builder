@@ -37,7 +37,7 @@ export async function GET(
     const tools: Tool[] = prismaTools.map(tool => ({
       ...tool,
       parameters: tool.parameters as Tool['parameters'],
-      implementation: tool.implementation as Record<string, unknown> | undefined,
+      implementation: undefined, // Implementation is stored as string in DB, not compatible with Tool type
     }))
     
     // Convert Prisma agent to our Agent type

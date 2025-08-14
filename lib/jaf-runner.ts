@@ -188,7 +188,7 @@ export async function* streamAgent(
             if (parsed.choices?.[0]?.delta?.content) {
               yield parsed.choices[0].delta.content
             }
-          } catch (e) {
+          } catch {
             // Ignore parse errors
           }
         }

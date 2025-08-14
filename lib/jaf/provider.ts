@@ -4,19 +4,16 @@
  */
 
 import { ModelProvider, RunState, Agent, RunConfig, Message, makeLiteLLMProvider } from '@xynehq/jaf'
-import { formatModelForLiteLLM } from './litellm-provider'
+import { z } from 'zod'
+import { ModelProviderConfig, JAFContext, ProviderResponse } from './types'
 
-export interface ModelProviderConfig {
-  provider: 'openai' | 'anthropic' | 'google' | 'litellm'
-  apiKey: string
-  baseURL?: string
-  model?: string
-}
+// Re-export for backwards compatibility
+export type { ModelProviderConfig } from './types'
 
 /**
  * Create a model provider for JAF
  */
-export function createModelProvider(config: ModelProviderConfig): ModelProvider<any> {
+export function createModelProvider(config: ModelProviderConfig): ModelProvider<JAFContext> {
   // If using LiteLLM, delegate to the LiteLLM provider
   if (config.provider === 'litellm') {
     const baseURL = config.baseURL || process.env.LITELLM_URL || 'http://localhost:4000'
@@ -29,9 +26,9 @@ export function createModelProvider(config: ModelProviderConfig): ModelProvider<
   // Otherwise, use our custom implementations
   return {
     getCompletion: async (
-      state: Readonly<RunState<any>>,
-      agent: Readonly<Agent<any, any>>,
-      runConfig: Readonly<RunConfig<any>>
+      state: Readonly<RunState<JAFContext>>,
+      agent: Readonly<Agent<JAFContext, unknown>>,
+      runConfig: Readonly<RunConfig<JAFContext>>
     ) => {
       const modelName = runConfig.modelOverride || agent.modelConfig?.name || config.model || 'gpt-3.5-turbo'
       
@@ -53,11 +50,11 @@ export function createModelProvider(config: ModelProviderConfig): ModelProvider<
  * OpenAI completion handler
  */
 async function getOpenAICompletion(
-  state: RunState<any>,
-  agent: Agent<any, any>,
+  state: RunState<JAFContext>,
+  agent: Agent<JAFContext, unknown>,
   model: string,
   config: ModelProviderConfig
-) {
+): Promise<ProviderResponse> {
   const baseURL = config.baseURL || 'https://api.openai.com/v1'
   
   // Convert JAF messages to OpenAI format
@@ -131,11 +128,11 @@ async function getOpenAICompletion(
  * Anthropic completion handler
  */
 async function getAnthropicCompletion(
-  state: RunState<any>,
-  agent: Agent<any, any>,
+  state: RunState<JAFContext>,
+  agent: Agent<JAFContext, unknown>,
   model: string,
   config: ModelProviderConfig
-) {
+): Promise<ProviderResponse> {
   const baseURL = config.baseURL || 'https://api.anthropic.com/v1'
   
   // Convert JAF messages to Anthropic format
@@ -175,7 +172,7 @@ async function getAnthropicCompletion(
   
   return {
     message: {
-      content: data.content[0].text
+      content: (data.content[0] as { text: string }).text
     }
   }
 }
@@ -184,11 +181,11 @@ async function getAnthropicCompletion(
  * Google completion handler
  */
 async function getGoogleCompletion(
-  state: RunState<any>,
-  agent: Agent<any, any>,
+  state: RunState<JAFContext>,
+  agent: Agent<JAFContext, unknown>,
   model: string,
   config: ModelProviderConfig
-) {
+): Promise<ProviderResponse> {
   const baseURL = config.baseURL || 'https://generativelanguage.googleapis.com/v1beta'
   
   // Convert JAF messages to Google format
@@ -230,7 +227,7 @@ async function getGoogleCompletion(
   
   return {
     message: {
-      content: data.candidates[0].content.parts[0].text
+      content: (data.candidates[0].content.parts[0] as { text: string }).text
     }
   }
 }
@@ -238,7 +235,7 @@ async function getGoogleCompletion(
 /**
  * Convert Zod schema to OpenAI function parameters
  */
-function schemaToOpenAIParams(schema: any): any {
+function schemaToOpenAIParams(_schema: z.ZodTypeAny): Record<string, unknown> {
   // This is a simplified version - in production, you'd want to properly
   // introspect the Zod schema and convert it to JSON Schema
   return {

@@ -3,38 +3,30 @@
  * Creates JAF agents from database configurations
  */
 
-import { Agent, Tool, RunState } from '@xynehq/jaf'
 import { z } from 'zod'
+import { RunState } from '@xynehq/jaf'
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db'
 import { createJAFAgent } from './core'
 import { getToolsByIds } from '../jaf-tools'
+import { 
+  DBAgent, 
+  DBTool, 
+  TypedJAFAgent, 
+  TypedJAFTool,
+  JAFContext,
+  JAFModelConfig
+} from './types'
 
-export interface DBAgent {
-  id: string
-  name: string
-  description: string | null
-  model: string
-  instructions: string
-  modelConfig: any
-  handoffs: string[]
-  outputSchema: any
-  memoryType: string | null
-  memoryConfig: any
-  inputGuardrails: any
-  outputGuardrails: any
-  tools: string[]
-  capabilities: string[]
-  systemPrompt: string
-  config: any
-  status: string
-}
+// Re-export DBAgent for backward compatibility
+export type { DBAgent } from './types'
 
 /**
  * Create a JAF agent from a database agent record
  */
 export async function createJAFAgentFromDB(
-  dbAgent: DBAgent | any
-): Promise<Agent<any, any>> {
+  dbAgent: DBAgent
+): Promise<TypedJAFAgent> {
   console.log('[JAF:FACTORY] Creating agent from DB:', {
     id: dbAgent.id,
     name: dbAgent.name,
@@ -58,10 +50,10 @@ export async function createJAFAgentFromDB(
   // Create the JAF agent
   const agent = createJAFAgent({
     name: dbAgent.name,
-    instructions: (state: RunState<any>) => {
+    instructions: (state: RunState<JAFContext>) => {
       // Template instructions with context if needed
-      return instructions.replace(/\{\{(\w+)\}\}/g, (match, key) => {
-        return state.context?.[key] || match
+      return instructions.replace(/\{\{(\w+)\}\}/g, (match, key: string) => {
+        return state.context?.[key as keyof JAFContext] as string || match
       })
     },
     tools,
@@ -76,7 +68,7 @@ export async function createJAFAgentFromDB(
 /**
  * Load tools for an agent
  */
-async function loadToolsForAgent(toolIds: string[]): Promise<Tool<any, any>[]> {
+async function loadToolsForAgent(toolIds: string[]): Promise<TypedJAFTool[]> {
   if (!toolIds || toolIds.length === 0) {
     return []
   }
@@ -86,7 +78,7 @@ async function loadToolsForAgent(toolIds: string[]): Promise<Tool<any, any>[]> {
   
   // If we have all tools, return them
   if (builtInTools.length === toolIds.length) {
-    return builtInTools
+    return builtInTools as TypedJAFTool[]
   }
   
   // Otherwise, load custom tools from database
@@ -102,19 +94,19 @@ async function loadToolsForAgent(toolIds: string[]): Promise<Tool<any, any>[]> {
     })
     
     const loadedCustomTools = await Promise.all(
-      customTools.map(tool => createToolFromDB(tool))
+      customTools.map(tool => createToolFromDB(tool as unknown as DBTool))
     )
     
-    return [...builtInTools, ...loadedCustomTools]
+    return [...builtInTools, ...loadedCustomTools] as TypedJAFTool[]
   }
   
-  return builtInTools
+  return builtInTools as TypedJAFTool[]
 }
 
 /**
  * Create a tool from database configuration
  */
-async function createToolFromDB(dbTool: any): Promise<Tool<any, any>> {
+async function createToolFromDB(dbTool: DBTool): Promise<TypedJAFTool> {
   // If schema is already defined, use it
   if (dbTool.schema) {
     const schema = typeof dbTool.schema === 'string' 
@@ -148,7 +140,7 @@ async function createToolFromDB(dbTool: any): Promise<Tool<any, any>> {
       description: dbTool.description || '',
       parameters: await parseZodSchema(parameters)
     },
-    execute: async (args: any) => {
+    execute: async (args: unknown) => {
       // Default implementation - just return a message
       return `Tool ${dbTool.name} called with args: ${JSON.stringify(args)}`
     }
@@ -158,7 +150,7 @@ async function createToolFromDB(dbTool: any): Promise<Tool<any, any>> {
 /**
  * Parse model configuration
  */
-function parseModelConfig(config: any, model: string): any {
+function parseModelConfig(config: unknown, model: string): JAFModelConfig {
   const defaultConfig = {
     name: model,
     temperature: 0.7,
@@ -169,7 +161,7 @@ function parseModelConfig(config: any, model: string): any {
     return defaultConfig
   }
   
-  const parsed = typeof config === 'string' ? JSON.parse(config) : config
+  const parsed = typeof config === 'string' ? JSON.parse(config) : config as Record<string, unknown>
   
   return {
     ...defaultConfig,
@@ -181,45 +173,47 @@ function parseModelConfig(config: any, model: string): any {
 /**
  * Parse a Zod schema from JSON
  */
-async function parseZodSchema(schemaJson: any): Promise<z.ZodType<any>> {
+async function parseZodSchema(schemaJson: unknown): Promise<z.ZodTypeAny> {
   if (!schemaJson) {
-    return z.any()
+    return z.unknown()
   }
   
   // If it's already a Zod schema, return it
-  if (schemaJson._def) {
-    return schemaJson
+  const zodSchema = schemaJson as z.ZodTypeAny
+  if (zodSchema._def) {
+    return zodSchema
   }
   
   // Parse from JSON representation
   const schema = typeof schemaJson === 'string' 
-    ? JSON.parse(schemaJson)
-    : schemaJson
+    ? JSON.parse(schemaJson) as Record<string, unknown>
+    : schemaJson as Record<string, unknown>
   
   // Build Zod schema from JSON
   // This is a simplified version - in production you'd want a more robust parser
   if (schema.type === 'object' && schema.properties) {
-    const shape: Record<string, z.ZodType<any>> = {}
+    const shape: Record<string, z.ZodTypeAny> = {}
     
-    for (const [key, value] of Object.entries(schema.properties as any)) {
+    for (const [key, value] of Object.entries(schema.properties as Record<string, unknown>)) {
       shape[key] = parseZodType(value)
     }
     
     return z.object(shape)
   }
   
-  return z.any()
+  return z.unknown()
 }
 
 /**
  * Parse individual Zod types
  */
-function parseZodType(type: any): z.ZodType<any> {
-  if (!type || !type.type) {
-    return z.any()
+function parseZodType(type: unknown): z.ZodTypeAny {
+  const typeObj = type as Record<string, unknown>
+  if (!typeObj || !typeObj.type) {
+    return z.unknown()
   }
   
-  switch (type.type) {
+  switch (typeObj.type) {
     case 'string':
       return z.string()
     case 'number':
@@ -227,25 +221,25 @@ function parseZodType(type: any): z.ZodType<any> {
     case 'boolean':
       return z.boolean()
     case 'array':
-      return z.array(parseZodType(type.items || {}))
+      return z.array(parseZodType(typeObj.items || {}))
     case 'object':
-      if (type.properties) {
-        const shape: Record<string, z.ZodType<any>> = {}
-        for (const [key, value] of Object.entries(type.properties)) {
+      if (typeObj.properties) {
+        const shape: Record<string, z.ZodTypeAny> = {}
+        for (const [key, value] of Object.entries(typeObj.properties as Record<string, unknown>)) {
           shape[key] = parseZodType(value)
         }
         return z.object(shape)
       }
-      return z.record(z.any())
+      return z.record(z.unknown())
     default:
-      return z.any()
+      return z.unknown()
   }
 }
 
 /**
  * Validate agent configuration before creating
  */
-export async function validateAgentConfiguration(agent: any): Promise<boolean> {
+export async function validateAgentConfiguration(agent: Partial<DBAgent>): Promise<boolean> {
   // Basic validation
   if (!agent.name) {
     throw new Error('Agent name is required')
@@ -300,16 +294,17 @@ export async function updateAgentWithJAFConfig(
   }
   
   const updatedAgent = { ...currentAgent, ...updates }
-  await validateAgentConfiguration(updatedAgent)
+  await validateAgentConfiguration(updatedAgent as Partial<DBAgent>)
   
-  // Update the agent
+  // Update the agent - using unknown for Prisma type compatibility
   await prisma.agent.update({
     where: { id: agentId },
     data: {
       ...updates,
+      modelConfig: updates.modelConfig as unknown as Prisma.InputJsonValue,
       // Ensure instructions are set if only systemPrompt was provided
       instructions: updates.instructions || updates.systemPrompt || currentAgent.instructions,
       updatedAt: new Date()
-    }
+    } as unknown as Prisma.AgentUpdateInput
   })
 }

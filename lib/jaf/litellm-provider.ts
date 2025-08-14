@@ -28,7 +28,7 @@ export interface LiteLLMConfig {
  * @param config LiteLLM configuration
  * @returns ModelProvider for JAF
  */
-export function createLiteLLMProvider(config: LiteLLMConfig = {}): ModelProvider<any> {
+export function createLiteLLMProvider(config: LiteLLMConfig = {}): ModelProvider<Record<string, unknown>> {
   // Default to local LiteLLM proxy or use provided URL
   const baseURL = config.baseURL || process.env.LITELLM_URL || 'http://localhost:4000'
   
