@@ -57,17 +57,19 @@ export async function GET(
     const agentData: Agent = {
       ...agent,
       config: agent.config as Record<string, unknown> | undefined,
-      knowledgeSources: agent.knowledgeSources.map((ks: {
-        type: string
-        name: string
-        source: string
-        settings: unknown
-      }) => ({
-        type: ks.type as 'document' | 'url' | 'api',
-        name: ks.name,
-        source: ks.source,
-        settings: ks.settings as Record<string, unknown> | undefined,
-      })),
+      knowledgeSources: agent.knowledgeSources && Array.isArray(agent.knowledgeSources) 
+        ? agent.knowledgeSources.map((ks: {
+            type: string
+            name: string
+            source: string
+            settings: unknown
+          }) => ({
+            type: ks.type as 'document' | 'url' | 'api',
+            name: ks.name,
+            source: ks.source,
+            settings: ks.settings as Record<string, unknown> | undefined,
+          }))
+        : [],
     }
     
     if (format === 'json') {

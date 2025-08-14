@@ -4,7 +4,8 @@ import { Agent, Tool, ToolParameter } from './types'
  * Transform UI agent configuration to JAF-compatible TypeScript code
  */
 export function agentConfigToJAF(agent: Agent, tools: Tool[]): string {
-  const selectedTools = tools.filter(t => agent.tools.includes(t.name) || agent.tools.includes(t.id))
+  const agentTools = agent.tools || []
+  const selectedTools = tools.filter(t => agentTools.includes(t.name) || agentTools.includes(t.id))
   const agentVarName = agent.name.replace(/[^a-zA-Z0-9]/g, '')
   
   const code = `import { Agent, Tool } from '@xynehq/jaf';
