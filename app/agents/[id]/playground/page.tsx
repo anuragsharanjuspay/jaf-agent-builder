@@ -90,10 +90,19 @@ export default function AgentPlaygroundPage({
     fetch(`/api/agents/${resolvedParams.id}/execute`)
       .then(res => res.json())
       .then(data => {
-        setExecutions(data)
+        // Ensure we have an array
+        if (Array.isArray(data)) {
+          setExecutions(data)
+        } else if (data.executions) {
+          setExecutions(data.executions)
+        } else {
+          // If not an array, set empty array
+          setExecutions([])
+        }
       })
       .catch(error => {
         console.error('Failed to fetch executions:', error)
+        setExecutions([])
       })
   }, [resolvedParams.id])
 
@@ -164,7 +173,15 @@ export default function AgentPlaygroundPage({
       // Refresh execution history
       const executionsRes = await fetch(`/api/agents/${resolvedParams.id}/execute`)
       const executionsData = await executionsRes.json()
-      setExecutions(executionsData)
+      // Ensure we have an array
+      if (Array.isArray(executionsData)) {
+        setExecutions(executionsData)
+      } else if (executionsData.executions) {
+        setExecutions(executionsData.executions)
+      } else {
+        // Keep existing executions if no new data
+        setExecutions(prev => prev)
+      }
     } catch (error) {
       const errorMessage: Message = {
         id: (Date.now() + 3).toString(),
@@ -348,7 +365,7 @@ export default function AgentPlaygroundPage({
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {executions.length === 0 ? (
+              {!Array.isArray(executions) || executions.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No executions yet</p>
               ) : (
                 <div className="space-y-4">
