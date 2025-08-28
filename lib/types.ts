@@ -2,24 +2,27 @@ import { z } from 'zod'
 
 // Agent configuration schema
 export const agentSchema = z.object({
+  // Basic
   name: z.string().min(1, "Agent name is required"),
   description: z.string().optional(),
   model: z.string().min(1, "Model selection is required"),
   systemPrompt: z.string().min(1, "System prompt is required"),
-  tools: z.array(z.string()).default([]),
+  tools: z.array(z.string()).default([]), // ids or names
   capabilities: z.array(z.string()).default([]),
   status: z.enum(['draft', 'active', 'archived']).default('draft'),
+
+  // JAF advanced (all optional)
+  instructions: z.string().optional(),
+  modelConfig: z.record(z.string(), z.unknown()).optional(),
+  handoffs: z.array(z.string()).optional(),
+  outputSchema: z.union([z.record(z.string(), z.unknown()), z.string()]).optional(),
+  memoryType: z.string().optional(),
+  memoryConfig: z.record(z.string(), z.unknown()).optional(),
+  inputGuardrails: z.record(z.string(), z.unknown()).optional(),
+  outputGuardrails: z.record(z.string(), z.unknown()).optional(),
 })
 
-export type AgentConfig = {
-  name: string
-  description?: string
-  model: string
-  systemPrompt: string
-  tools: string[]
-  capabilities: string[]
-  status: 'draft' | 'active' | 'archived'
-}
+export type AgentConfig = z.infer<typeof agentSchema>
 
 // Knowledge source schema
 export const knowledgeSourceSchema = z.object({

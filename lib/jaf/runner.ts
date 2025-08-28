@@ -47,6 +47,8 @@ export async function runJAFAgent(
   if (provider === 'litellm') {
     // LiteLLM can use its own authentication
     options.apiKey = options.apiKey || process.env.LITELLM_API_KEY || 'default'
+    // Use configured LiteLLM URL if not provided
+    options.baseURL = options.baseURL || process.env.LITELLM_URL || process.env.NEXT_PUBLIC_LITELLM_URL
   } else if (!options.apiKey) {
     throw new Error(`API key required for provider: ${provider}`)
   }
@@ -133,6 +135,8 @@ export async function* streamJAFAgentExecution(
   if (provider === 'litellm') {
     // LiteLLM can use its own authentication
     options.apiKey = options.apiKey || process.env.LITELLM_API_KEY || 'default'
+    // Use configured LiteLLM URL if not provided
+    options.baseURL = options.baseURL || process.env.LITELLM_URL || process.env.NEXT_PUBLIC_LITELLM_URL
   } else if (!options.apiKey) {
     throw new Error(`API key required for provider: ${provider}`)
   }

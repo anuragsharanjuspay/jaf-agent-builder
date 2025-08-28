@@ -175,11 +175,11 @@ export default function AgentDetailPage({
 
         <Card>
           <CardHeader>
-            <CardTitle>System Prompt</CardTitle>
+            <CardTitle>Instructions</CardTitle>
           </CardHeader>
           <CardContent>
             <pre className="whitespace-pre-wrap font-mono text-sm bg-muted p-4 rounded-lg">
-              {agent.systemPrompt}
+              {(agent as any).instructions || agent.systemPrompt}
             </pre>
           </CardContent>
         </Card>

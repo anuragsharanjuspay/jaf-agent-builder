@@ -16,11 +16,15 @@ export type { ModelProviderConfig } from './types'
 export function createModelProvider(config: ModelProviderConfig): ModelProvider<JAFContext> {
   // If using LiteLLM, delegate to the LiteLLM provider
   if (config.provider === 'litellm') {
-    const baseURL = config.baseURL || process.env.LITELLM_URL || 'http://localhost:4000'
+    const baseURL = config.baseURL || 
+                   process.env.LITELLM_URL || 
+                   process.env.NEXT_PUBLIC_LITELLM_URL || 
+                   'http://localhost:4000'
     const apiKey = config.apiKey || process.env.LITELLM_API_KEY || 'anything'
     
     console.log('[JAF:PROVIDER] Using LiteLLM provider:', { baseURL })
-    return makeLiteLLMProvider(baseURL, apiKey)
+    // return makeLiteLLMProvider(baseURL, apiKey)
+    return makeLiteLLMProvider("http://localhost:4000", "sk-1234")
   }
   
   // Otherwise, use our custom implementations
@@ -235,13 +239,53 @@ async function getGoogleCompletion(
 /**
  * Convert Zod schema to OpenAI function parameters
  */
-function schemaToOpenAIParams(_schema: z.ZodTypeAny): Record<string, unknown> {
-  // This is a simplified version - in production, you'd want to properly
-  // introspect the Zod schema and convert it to JSON Schema
-  return {
-    type: 'object',
-    properties: {},
-    required: []
+function schemaToOpenAIParams(schema: z.ZodTypeAny): Record<string, unknown> {
+  // Best-effort conversion from Zod to OpenAI tool parameters (JSON Schema-like)
+  try {
+    const resolve = (s: z.ZodTypeAny): any => {
+      const def: any = (s as any)._def
+      const typeName = def?.typeName
+      switch (typeName) {
+        case 'ZodString':
+          return { type: 'string' }
+        case 'ZodNumber':
+          return { type: 'number' }
+        case 'ZodBoolean':
+          return { type: 'boolean' }
+        case 'ZodArray':
+          return { type: 'array', items: resolve(def.type) }
+        case 'ZodObject': {
+          const shape = typeof s.shape === 'function' ? s.shape() : def.shape()
+          const properties: Record<string, unknown> = {}
+          const required: string[] = []
+          for (const key of Object.keys(shape)) {
+            const field = shape[key]
+            const isOptional = (field as any).isOptional?.() || (field as any)._def?.typeName === 'ZodOptional'
+            properties[key] = resolve(field)
+            if (!isOptional) required.push(key)
+          }
+          return { type: 'object', properties, required }
+        }
+        case 'ZodOptional':
+          return resolve(def.innerType)
+        case 'ZodUnion':
+          return { anyOf: def.options?.map((o: any) => resolve(o)) || [] }
+        case 'ZodEnum':
+          return { type: 'string', enum: def.values }
+        case 'ZodRecord':
+          return { type: 'object', additionalProperties: true }
+        default:
+          return { type: 'string' }
+      }
+    }
+    const json = resolve(schema)
+    // Ensure root is an object as required by OpenAI tool params
+    if (json.type !== 'object') {
+      return { type: 'object', properties: { input: json }, required: [] }
+    }
+    return json
+  } catch {
+    return { type: 'object', properties: {}, required: [] }
   }
 }
 
@@ -249,8 +293,11 @@ function schemaToOpenAIParams(_schema: z.ZodTypeAny): Record<string, unknown> {
  * Get provider from model name
  */
 export function getProviderFromModel(model: string): 'openai' | 'anthropic' | 'google' | 'litellm' {
-  // Check if LiteLLM is configured
-  if (process.env.USE_LITELLM === 'true' || process.env.LITELLM_URL) {
+  // Check if LiteLLM is configured (check both server and client env vars)
+  if (process.env.USE_LITELLM === 'true' || 
+      process.env.NEXT_PUBLIC_USE_LITELLM === 'true' || 
+      process.env.LITELLM_URL || 
+      process.env.NEXT_PUBLIC_LITELLM_URL) {
     return 'litellm'
   }
   

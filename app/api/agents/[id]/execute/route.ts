@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { runAgent, streamAgent } from '@/lib/jaf/runner'
+import { prisma } from '@/lib/db'
 
 export async function POST(
   request: NextRequest,
@@ -91,14 +92,18 @@ export async function GET(
 ) {
   try {
     const { id } = await params
-    
-    // Return last execution or agent info
-    // This is a placeholder - implement based on your needs
-    return NextResponse.json({
-      agentId: id,
-      status: 'ready',
-      message: 'Use POST to execute the agent'
+    const { searchParams } = new URL(request.url)
+    const take = Math.min(parseInt(searchParams.get('limit') || '20', 10) || 20, 100)
+    const skip = Math.max(parseInt(searchParams.get('skip') || '0', 10) || 0, 0)
+
+    const executions = await prisma.agentExecution.findMany({
+      where: { agentId: id },
+      orderBy: { createdAt: 'desc' },
+      take,
+      skip,
     })
+
+    return NextResponse.json(executions)
   } catch (error) {
     console.error('[API:EXECUTE] GET error:', error)
     return NextResponse.json(

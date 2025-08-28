@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db'
 import { agentSchema } from '@/lib/types'
 
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -48,16 +48,55 @@ export async function PUT(
   try {
     const { id } = await params
     const body = await request.json()
-    
-    // Validate input
+
+    // Extract optional knowledge sources before validation (not in agentSchema)
+    const knowledgeSources = Array.isArray(body.knowledgeSources)
+      ? body.knowledgeSources as Array<{
+          type: 'document' | 'url' | 'api'
+          name: string
+          source: string
+          settings?: Record<string, unknown>
+        }>
+      : []
+
+    // Validate base agent fields
     const validated = agentSchema.parse(body)
-    
-    const agent = await prisma.agent.update({
-      where: { id },
-      data: validated,
+
+    // Update agent and replace knowledge sources transactionally
+    const result = await prisma.$transaction(async (tx) => {
+      const agent = await tx.agent.update({
+        where: { id },
+        data: {
+          ...validated,
+          instructions: validated.instructions ?? validated.systemPrompt ?? '',
+        },
+      })
+
+      // Replace knowledge sources if provided; if empty array provided, clear
+      if (Array.isArray(body.knowledgeSources)) {
+        await tx.knowledgeSource.deleteMany({ where: { agentId: id } })
+        if (knowledgeSources.length > 0) {
+          await tx.knowledgeSource.createMany({
+            data: knowledgeSources.map(ks => ({
+              agentId: id,
+              type: ks.type,
+              name: ks.name,
+              source: ks.source,
+              settings: ks.settings as unknown as object | undefined,
+            }))
+          })
+        }
+      }
+
+      return agent
     })
-    
-    return NextResponse.json(agent)
+
+    const fullAgent = await prisma.agent.findUnique({
+      where: { id: result.id },
+      include: { knowledgeSources: true },
+    })
+
+    return NextResponse.json(fullAgent)
   } catch (error) {
     console.error('Failed to update agent:', error)
     return NextResponse.json(

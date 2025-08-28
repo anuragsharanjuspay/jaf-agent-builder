@@ -15,6 +15,7 @@ export default function EditAgentPage({
   const [tools, setTools] = useState<Tool[]>([])
   const [agent, setAgent] = useState<AgentConfig | null>(null)
   const [loading, setLoading] = useState(true)
+  const [knowledgeSources, setKnowledgeSources] = useState<any[]>([])
 
   useEffect(() => {
     // Fetch both tools and agent data
@@ -29,11 +30,12 @@ export default function EditAgentPage({
           name: agentData.name,
           description: agentData.description || '',
           model: agentData.model,
-          systemPrompt: agentData.systemPrompt,
+          instructions: (agentData as any).instructions || agentData.systemPrompt,
           tools: agentData.tools,
           capabilities: agentData.capabilities,
           status: agentData.status as 'draft' | 'active' | 'archived',
         })
+        setKnowledgeSources(agentData.knowledgeSources || [])
         setLoading(false)
       })
       .catch(error => {
@@ -96,7 +98,7 @@ export default function EditAgentPage({
           Update your agent&apos;s configuration
         </p>
       </div>
-      <AgentForm agent={agent} tools={tools} onSubmit={handleSubmit} />
+      <AgentForm agent={agent} tools={tools} initialKnowledgeSources={knowledgeSources as any} onSubmit={handleSubmit} />
     </div>
   )
 }

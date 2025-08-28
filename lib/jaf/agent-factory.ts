@@ -72,35 +72,49 @@ async function loadToolsForAgent(toolIds: string[]): Promise<TypedJAFTool[]> {
   if (!toolIds || toolIds.length === 0) {
     return []
   }
-  
-  // First try to get built-in tools
-  const builtInTools = getToolsByIds(toolIds)
-  
-  // If we have all tools, return them
-  if (builtInTools.length === toolIds.length) {
-    return builtInTools as TypedJAFTool[]
-  }
-  
-  // Otherwise, load custom tools from database
-  const customToolIds = toolIds.filter(
-    id => !builtInTools.some(t => t.schema.name === id)
-  )
-  
-  if (customToolIds.length > 0) {
-    const customTools = await prisma.tool.findMany({
+
+  // Normalize and dedupe incoming identifiers
+  const uniqueIds = Array.from(new Set(toolIds.filter(Boolean)))
+
+  // 1) Resolve built-in tools by name (registry keys)
+  const builtInByName = getToolsByIds(uniqueIds)
+
+  // Track selected tool names to avoid duplicates
+  const selectedByName = new Set<string>(builtInByName.map(t => t.schema.name))
+
+  // 2) Load matching DB tool rows by either id or name for any unresolved identifiers
+  const unresolved = uniqueIds.filter(id => !selectedByName.has(id))
+  let dbTools: DBTool[] = []
+  if (unresolved.length > 0) {
+    const rows = await prisma.tool.findMany({
       where: {
-        name: { in: customToolIds }
+        OR: [
+          { id: { in: unresolved } },
+          { name: { in: unresolved } },
+        ]
       }
     })
-    
-    const loadedCustomTools = await Promise.all(
-      customTools.map(tool => createToolFromDB(tool as unknown as DBTool))
-    )
-    
-    return [...builtInTools, ...loadedCustomTools] as TypedJAFTool[]
+    dbTools = rows as unknown as DBTool[]
   }
-  
-  return builtInTools as TypedJAFTool[]
+
+  // 3) For DB tools that correspond to built-ins (matched by name), prefer the built-in implementation
+  const builtInFromDB: TypedJAFTool[] = []
+  for (const row of dbTools) {
+    if (!row?.name) continue
+    if (selectedByName.has(row.name)) continue // already included
+    const reg = getToolsByIds([row.name])
+    if (reg.length > 0) {
+      builtInFromDB.push(reg[0] as TypedJAFTool)
+      selectedByName.add(row.name)
+    }
+  }
+
+  // 4) Remaining DB tools become custom tools
+  const customDBTools = dbTools.filter(row => !selectedByName.has(row.name))
+  const customResolved = await Promise.all(customDBTools.map(t => createToolFromDB(t)))
+
+  // 5) Return combined unique list
+  return [...(builtInByName as TypedJAFTool[]), ...builtInFromDB, ...customResolved]
 }
 
 /**
@@ -114,7 +128,7 @@ async function createToolFromDB(dbTool: DBTool): Promise<TypedJAFTool> {
       : dbTool.schema
     
     // Create the tool with custom implementation if provided
-    if (dbTool.implementation) {
+    if (dbTool.implementation && process.env.ENABLE_DB_TOOL_CODE === 'true') {
       try {
         // Safely evaluate the implementation
         const executeFunc = new Function('return ' + dbTool.implementation)()

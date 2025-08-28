@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, use, useRef } from 'react'
+import { useState, useEffect, useRef, use } from 'react'
 import { useRouter } from 'next/navigation'
 import { Agent } from '@/lib/types'
 import { Button } from '@/components/ui/button'
@@ -126,8 +126,18 @@ export default function AgentPlaygroundPage({
     setSending(true)
     
     try {
-      // Check if API key is needed
-      const needsApiKey = agent?.model.includes('gpt') || agent?.model.includes('claude') || agent?.model.includes('gemini')
+      // Check if API key is needed (skip if LiteLLM is configured)
+      // LiteLLM handles its own authentication, so we don't need to check for API key
+      const useLiteLLM = process.env.NEXT_PUBLIC_USE_LITELLM === 'true'
+      const isLiteLLMModel = agent?.model.includes('/') || 
+                            agent?.model.includes('llama') || 
+                            agent?.model.includes('mixtral') || 
+                            agent?.model.includes('mistral')
+      const needsApiKey = !useLiteLLM && !isLiteLLMModel && 
+                         (agent?.model.includes('gpt') || 
+                          agent?.model.includes('claude') || 
+                          agent?.model.includes('gemini'))
+      
       if (needsApiKey && !apiKey) {
         const errorMessage: Message = {
           id: (Date.now() + 1).toString(),
@@ -429,14 +439,14 @@ export default function AgentPlaygroundPage({
         <TabsContent value="prompt" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>System Prompt</CardTitle>
+              <CardTitle>Instructions</CardTitle>
               <CardDescription>
                 The instructions that define this agent&apos;s behavior
               </CardDescription>
             </CardHeader>
             <CardContent>
               <pre className="whitespace-pre-wrap font-mono text-sm bg-muted p-4 rounded-lg">
-                {agent.systemPrompt}
+                {(agent as any).instructions || agent.systemPrompt}
               </pre>
             </CardContent>
           </Card>
